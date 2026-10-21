@@ -57,12 +57,8 @@ if (-not (Test-Path $envArq)) {
     Falha "não havia .env. Criei um a partir do .env.example em:`n  $envArq`nPreencha as credenciais e LOJAS_PERMITIDAS e rode a instalação de novo."
 }
 $porta = [int](Ler-Env "PORT" "3003")
-$hostWeb = Ler-Env "HOST" "127.0.0.1"
 $lojas = Ler-Env "LOJAS_PERMITIDAS" "todas"
 Ok "porta $porta · lojas: $lojas"
-if ($hostWeb -eq "127.0.0.1" -or $hostWeb -eq "localhost") {
-    Aviso "HOST=${hostWeb}: o relatório só abre NESTE computador. Para a rede interna acessar, use HOST=0.0.0.0 no .env."
-}
 $nomeTarefa = "Relatorio de notas ($porta)"
 
 # ---------- 2. porta (antes do Python: numa reinstalação o .venv pode estar em uso) ----------
@@ -122,15 +118,13 @@ foreach ($pasta in "dados", "logs") {
 }
 
 # ---------- 4. firewall ----------
-Passo "Liberando a porta $porta no firewall (só rede interna)"
+# Todos os perfis de rede (Domínio, Privado e Público), como no Controle de validade: se a rede do
+# servidor estiver classificada como "Pública", uma regra só para Domínio/Privado não valeria.
+Passo "Liberando a porta $porta no firewall do Windows"
 Get-NetFirewallRule -DisplayName $nomeTarefa -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 New-NetFirewallRule -DisplayName $nomeTarefa -Direction Inbound -Protocol TCP -LocalPort $porta `
-    -Action Allow -Profile Domain, Private | Out-Null
-Ok "regra '$nomeTarefa' criada (perfis Domínio e Privado)"
-$publicas = Get-NetConnectionProfile | Where-Object NetworkCategory -eq "Public"
-if ($publicas) {
-    Aviso "a rede '$($publicas[0].Name)' está como Pública: nela a porta continua bloqueada. Mude para Privada/Domínio se o acesso pela rede falhar."
-}
+    -Action Allow -Profile Any | Out-Null
+Ok "regra '$nomeTarefa' criada"
 
 # ---------- 5. tarefa agendada ----------
 Passo "Criando a tarefa agendada '$nomeTarefa'"
@@ -160,6 +154,13 @@ if (-not $respondeu) { Falha "o relatório não respondeu em $url. Veja o log: $
 Ok "respondendo em http://localhost:$porta"
 
 $ips = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" }).IPAddress
+# Testa pelo IP da rede: se só responder no localhost, o sistema não está aceitando conexões de fora
+$naRede = $ips | Where-Object {
+    try { Invoke-WebRequest "http://${_}:$porta/api/lojas" -UseBasicParsing -TimeoutSec 5 | Out-Null; $true } catch { $false }
+}
+if ($naRede) { Ok "respondendo também pelo IP da rede ($($naRede -join ', '))" }
+else { Aviso "responde no localhost, mas não pelo IP da rede. Veja o log e se há antivírus/firewall de terceiros bloqueando a porta $porta." }
+
 Write-Host "`nPronto! Acesse de outra máquina da rede:" -ForegroundColor Green
 $ips | ForEach-Object { Write-Host "  http://${_}:$porta" }
 Write-Host "  http://$($env:COMPUTERNAME):$porta"

@@ -21,14 +21,14 @@ Sobe sozinho ao ligar o computador, sem precisar de login, na porta do `.env` (3
 
 1. Copie a pasta do projeto para o servidor (ex.: `C:\projetos\notas-fiscais-lancadas`).
 2. Tenha o [Python](https://www.python.org/downloads/) 3.10 ou mais novo instalado (marque *Add python.exe to PATH*). Não precisa de ODBC Driver nem de Visual C++.
-3. Crie o `.env` a partir do `.env.example`, com `HOST=0.0.0.0` e as `LOJAS_PERMITIDAS` desse servidor.
+3. Crie o `.env` a partir do `.env.example`, com as `LOJAS_PERMITIDAS` desse servidor.
 4. Clique duas vezes em **`servidor\instalar.bat`** e confirme o pedido de administrador.
 
 O instalador:
 - confere o `.env` e o Python;
 - cria o `.venv` e instala as dependências;
 - confere se a porta está livre. Se outro programa a estiver usando, **para e avisa**, sem trocar de porta;
-- libera a porta no firewall só para a rede interna (perfis Domínio e Privado);
+- libera a porta no firewall do Windows (todos os perfis de rede, como no Controle de validade);
 - cria a tarefa agendada **"Relatorio de notas (3003)"**: roda como SYSTEM ao ligar o computador e reinicia sozinho se cair;
 - inicia o sistema, testa e mostra os endereços de acesso.
 
@@ -48,7 +48,6 @@ O `.env` guarda **todas** as credenciais e servidores. Ele **não vai para o git
 | Variável | O que faz |
 | --- | --- |
 | `PORT` | Porta web (padrão 3003) |
-| `HOST` | `127.0.0.1` = só a própria máquina · `0.0.0.0` = rede interna |
 | `LOJAS_PERMITIDAS` | `todas` ou lista: `parque10, pontanegra, moradadosol, monte, cd, flores` |
 | `SISMOURA_USUARIO` / `SISMOURA_SENHA` | Acesso padrão ao SQL Server |
 | `<LOJA>_SERVIDOR` / `<LOJA>_BANCO` | Servidor e banco de cada loja (loja sem servidor fica desativada) |
@@ -60,7 +59,6 @@ Exemplo para o servidor da **Ponta Negra** — o faturista de lá só vê e alte
 
 ```ini
 PORT=3003
-HOST=0.0.0.0
 LOJAS_PERMITIDAS=pontanegra
 
 SISMOURA_USUARIO=...

@@ -30,7 +30,6 @@ from consulta import LOJAS as TODAS_LOJAS, carregar_config, conectar  # noqa: E4
 cfg = carregar_config()  # também carrega o .env
 DB_LOCAL = BASE / "dados" / "relatorio.db"
 PORTA = int(os.getenv("PORT", "3003"))
-HOST = os.getenv("HOST", "127.0.0.1")
 
 
 def lojas_permitidas():
@@ -666,19 +665,22 @@ def porta_em_uso(porta):
 
 
 if __name__ == "__main__":
-    # Uso:  python app.py                 → modo local (servidor do Flask) e abre o navegador
-    #       python app.py --producao      → servidor Waitress, sem navegador (servidor da empresa)
+    # Uso:  python app.py                 → modo local: só este computador acessa, abre o navegador
+    #       python app.py --producao      → servidor da empresa: Waitress, aceita acesso da rede
+    #                                        (http://NOME-DO-SERVIDOR:3003), como o Controle de validade
     producao = "--producao" in sys.argv
+    host = "0.0.0.0" if producao else "127.0.0.1"
     if porta_em_uso(PORTA):
         print(f"ERRO: a porta {PORTA} já está em uso. Veja qual programa a ocupa antes de iniciar "
               f"(não troque de porta sem atualizar orientacoes-projetos-ia.md).", file=sys.stderr)
         sys.exit(PORTA_OCUPADA)
     print(f"Lojas liberadas neste servidor: {', '.join(LOJAS.values())}")
-    print(f"Escutando em http://{HOST}:{PORTA} ({'produção' if producao else 'local'})", flush=True)
     if producao:
+        print(f"Escutando na rede: http://{socket.gethostname()}:{PORTA} (produção)", flush=True)
         from waitress import serve
-        serve(app, host=HOST, port=PORTA, threads=8)
+        serve(app, host=host, port=PORTA, threads=8)
     else:
+        print(f"Escutando em http://localhost:{PORTA} (local)", flush=True)
         if "--sem-navegador" not in sys.argv:
             threading.Timer(1.2, lambda: webbrowser.open(f"http://localhost:{PORTA}")).start()
-        app.run(host=HOST, port=PORTA, debug=False)
+        app.run(host=host, port=PORTA, debug=False)
