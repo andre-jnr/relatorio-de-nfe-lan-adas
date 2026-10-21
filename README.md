@@ -52,6 +52,16 @@ Com a restrição ativa:
 - XMLs importados destinados a outra loja são ignorados (aparecem no aviso da importação). XML sem loja reconhecida entra na loja do servidor.
 - Obs.: a Flores também recebe notas no CNPJ 0001-30 (Parque Dez). Num servidor só da Flores, escolha "Flores" no seletor de loja da importação para essas notas.
 
+## Backup e migração de servidor
+
+As notas lançadas vêm do SISMOURA; o que só existe neste sistema são as notas **a lançar** e **pendentes** (`dados/relatorio.db`).
+
+No botão de engrenagem (canto do topo) → **Backup dos dados**:
+- **Exportar** baixa `backup-notas-AAAA-MM-DD-HHMM.json` com todas as notas das lojas deste servidor.
+- **Importar** soma as notas do arquivo às atuais: nada é apagado, notas repetidas e de lojas que o servidor não acessa são ignoradas. Antes, uma cópia do banco é salva em `dados/backups/`.
+
+Para mudar de servidor: exporte no antigo, suba o sistema no novo e importe o arquivo.
+
 ## Proteger o `.env` no servidor (Windows)
 
 Deixe o arquivo legível só pelo administrador e pela conta que roda o sistema:

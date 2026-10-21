@@ -6,6 +6,7 @@ ficam num SQLite local (dados/relatorio.db) e continuam em aberto até serem
 lançadas no SISMOURA (detectado automaticamente) ou baixadas manualmente.
 """
 import io
+import json
 import os
 import re
 import sqlite3
@@ -19,7 +20,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE / ".claude" / "skills" / "banco-sismoura" / "scripts"))
@@ -554,11 +555,99 @@ def gerar_excel(p):
 
 @app.post("/api/excel")
 def api_excel():
-    from flask import send_file
     p = request.get_json()
     return send_file(gerar_excel(p), as_attachment=True,
                      download_name=f"Relatorio de notas {p['data']}.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+# ---------- backup (exportar / importar as notas a lançar e pendentes) ----------
+# As notas lançadas ficam no SISMOURA; aqui só vai o que existe apenas neste sistema.
+
+SISTEMA_BACKUP = "relatorio-notas-por-dia"
+CAMPOS_BACKUP = ("data", "tipo", "loja", "nf", "serie", "fornecedor", "valor", "motivo", "chave", "emissao",
+                 "cnpj_emit", "origem", "resolvido_em", "lancada_em", "lancada_loja", "criado_em")
+
+
+def notas_permitidas(con):
+    return [r for r in con.execute("SELECT * FROM notas_manuais ORDER BY id") if loja_ok(r["loja"])]
+
+
+def assinatura(n):
+    """Identifica a mesma nota entre bancos, para não duplicar ao importar o backup de novo."""
+    return (n["data"], n["tipo"], n["loja"] or "", so_digitos(n["nf"]), n["chave"] or "", n["criado_em"] or "")
+
+
+def copiar_banco():
+    """Cópia do banco local em dados/backups/ antes de importar. Retorna o nome do arquivo."""
+    if not DB_LOCAL.exists():
+        return None
+    destino = DB_LOCAL.parent / "backups" / f"relatorio-{datetime.now():%Y%m%d-%H%M%S}.db"
+    destino.parent.mkdir(exist_ok=True)
+    orig, dest = sqlite3.connect(DB_LOCAL), sqlite3.connect(destino)
+    try:
+        orig.backup(dest)
+    finally:
+        orig.close()
+        dest.close()
+    return destino.name
+
+
+@app.get("/api/backup/resumo")
+def api_backup_resumo():
+    with local() as con:
+        rows = notas_permitidas(con)
+    return jsonify({
+        "total": len(rows),
+        "alancar": sum(r["tipo"] == "alancar" for r in rows),
+        "pendentes": sum(r["tipo"] == "pendente" for r in rows),
+        "abertas": sum(not r["lancada_em"] and not r["resolvido_em"] for r in rows),
+    })
+
+
+@app.get("/api/backup")
+def api_backup_exportar():
+    with local() as con:
+        notas = [{c: r[c] for c in CAMPOS_BACKUP} for r in notas_permitidas(con)]
+    conteudo = {"sistema": SISTEMA_BACKUP, "versao": 1, "exportado_em": datetime.now().isoformat(timespec="seconds"),
+                "lojas": list(LOJAS.values()), "notas": notas}
+    buf = io.BytesIO(json.dumps(conteudo, ensure_ascii=False, indent=1).encode("utf-8"))
+    return send_file(buf, as_attachment=True, mimetype="application/json",
+                     download_name=f"backup-notas-{datetime.now():%Y-%m-%d-%H%M}.json")
+
+
+@app.post("/api/backup")
+def api_backup_importar():
+    """Soma as notas do backup às atuais (nunca apaga). Repetidas e de outras lojas são ignoradas."""
+    try:
+        conteudo = json.load(request.files["arquivo"])
+        notas = conteudo["notas"]
+        if conteudo.get("sistema") != SISTEMA_BACKUP or not isinstance(notas, list):
+            raise ValueError
+    except (KeyError, ValueError, TypeError, UnicodeDecodeError):
+        return jsonify({"erro": "O arquivo não é um backup deste relatório."}), 400
+
+    resumo = {"importadas": 0, "repetidas": 0, "outra_loja": 0, "invalidas": 0, "copia": copiar_banco()}
+    with local() as con:
+        existentes = {assinatura(r) for r in con.execute("SELECT * FROM notas_manuais")}
+        for n in notas:
+            if not isinstance(n, dict) or not n.get("data") or n.get("tipo") not in ("alancar", "pendente"):
+                resumo["invalidas"] += 1
+                continue
+            n = {c: n.get(c) for c in CAMPOS_BACKUP}
+            if not loja_ok(n["loja"]):
+                resumo["outra_loja"] += 1
+                continue
+            if assinatura(n) in existentes:
+                resumo["repetidas"] += 1
+                continue
+            existentes.add(assinatura(n))
+            n["valor"] = float(n["valor"] or 0)
+            cols = [c for c in CAMPOS_BACKUP if n[c] is not None]
+            con.execute(f"INSERT INTO notas_manuais ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+                        [n[c] for c in cols])
+            resumo["importadas"] += 1
+    return jsonify(resumo)
 
 
 @app.get("/")
