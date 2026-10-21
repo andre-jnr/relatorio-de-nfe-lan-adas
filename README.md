@@ -3,7 +3,7 @@
 Relatório diário das notas de entrada: **lançadas** no SISMOURA (lidas direto do banco, somente leitura), **a lançar** e **pendentes** (cadastradas na tela ou importadas por XML/ZIP de NF-e). Exporta para Excel e PDF.
 
 - Porta padrão: **3003** (variável `PORT`)
-- Python 3 + Flask, SQL Server via ODBC Driver 17, SQLite local em `dados/relatorio.db`
+- Python 3.10+ (testado até o 3.15) + Flask, SQL Server via `mssql-python` (driver oficial da Microsoft, conexão criptografada, dispensa instalar ODBC Driver), SQLite local em `dados/relatorio.db`
 
 ## Instalação
 
@@ -20,12 +20,12 @@ Parâmetro `--sem-navegador` impede abrir o navegador ao iniciar. `--producao` u
 Sobe sozinho ao ligar o computador, sem precisar de login, na porta do `.env` (3003).
 
 1. Copie a pasta do projeto para o servidor (ex.: `C:\projetos\notas-fiscais-lancadas`).
-2. Instale o [Python **3.14**](https://www.python.org/downloads/) (marque *Add python.exe to PATH*) e o *ODBC Driver 17 for SQL Server*. Versões 3.12 a 3.14 servem; a 3.15 ainda não tem o `pyodbc` pronto, e o instalador ignora essa versão se houver outra compatível.
+2. Tenha o [Python](https://www.python.org/downloads/) 3.10 ou mais novo instalado (marque *Add python.exe to PATH*). Não precisa de ODBC Driver nem de Visual C++.
 3. Crie o `.env` a partir do `.env.example`, com `HOST=0.0.0.0` e as `LOJAS_PERMITIDAS` desse servidor.
 4. Clique duas vezes em **`servidor\instalar.bat`** e confirme o pedido de administrador.
 
 O instalador:
-- confere o `.env`, o Python e o driver ODBC;
+- confere o `.env` e o Python;
 - cria o `.venv` e instala as dependências;
 - confere se a porta está livre. Se outro programa a estiver usando, **para e avisa**, sem trocar de porta;
 - libera a porta no firewall só para a rede interna (perfis Domínio e Privado);
@@ -50,7 +50,7 @@ O `.env` guarda **todas** as credenciais e servidores. Ele **não vai para o git
 | `PORT` | Porta web (padrão 3003) |
 | `HOST` | `127.0.0.1` = só a própria máquina · `0.0.0.0` = rede interna |
 | `LOJAS_PERMITIDAS` | `todas` ou lista: `parque10, pontanegra, moradadosol, monte, cd, flores` |
-| `SISMOURA_USUARIO` / `SISMOURA_SENHA` / `SISMOURA_DRIVER` | Acesso padrão ao SQL Server |
+| `SISMOURA_USUARIO` / `SISMOURA_SENHA` | Acesso padrão ao SQL Server |
 | `<LOJA>_SERVIDOR` / `<LOJA>_BANCO` | Servidor e banco de cada loja (loja sem servidor fica desativada) |
 | `<LOJA>_USUARIO` / `<LOJA>_SENHA` | Opcional: credencial própria da loja (ex.: Flores) |
 
@@ -63,7 +63,6 @@ PORT=3003
 HOST=0.0.0.0
 LOJAS_PERMITIDAS=pontanegra
 
-SISMOURA_DRIVER=ODBC Driver 17 for SQL Server
 SISMOURA_USUARIO=...
 SISMOURA_SENHA='...'
 PONTANEGRA_SERVIDOR=...

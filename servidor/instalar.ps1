@@ -2,9 +2,9 @@
 # Rode como Administrador:  clique duas vezes em servidor\instalar.bat
 #
 # O que faz:
-#   1. confere o .env, o Python e o driver ODBC
+#   1. confere o .env
 #   2. confere se a porta está livre (se estiver ocupada por outro programa, para e avisa)
-#   3. cria o ambiente Python (.venv) com uma versão compatível com o pyodbc e instala as dependências
+#   3. cria o ambiente Python (.venv) e instala as dependências
 #   4. libera a porta no firewall só para a rede interna (perfis Domínio e Privado)
 #   5. cria a tarefa agendada "Relatorio de notas (<porta>)" que roda servidor\iniciar.ps1 ao ligar
 #   6. inicia o relatório e testa o acesso
@@ -59,16 +59,11 @@ if (-not (Test-Path $envArq)) {
 $porta = [int](Ler-Env "PORT" "3003")
 $hostWeb = Ler-Env "HOST" "127.0.0.1"
 $lojas = Ler-Env "LOJAS_PERMITIDAS" "todas"
-$driver = Ler-Env "SISMOURA_DRIVER" "ODBC Driver 17 for SQL Server"
 Ok "porta $porta · lojas: $lojas"
 if ($hostWeb -eq "127.0.0.1" -or $hostWeb -eq "localhost") {
     Aviso "HOST=${hostWeb}: o relatório só abre NESTE computador. Para a rede interna acessar, use HOST=0.0.0.0 no .env."
 }
 $nomeTarefa = "Relatorio de notas ($porta)"
-
-Passo "Conferindo o driver ODBC"
-if (Get-OdbcDriver -Name $driver -Platform "64-bit" -ErrorAction SilentlyContinue) { Ok $driver }
-else { Aviso "'$driver' não encontrado. Instale-o, senão o relatório não conecta no SISMOURA." }
 
 # ---------- 2. porta (antes do Python: numa reinstalação o .venv pode estar em uso) ----------
 Passo "Conferindo a porta $porta"
@@ -83,46 +78,37 @@ if ($proc) {
 Ok "porta livre"
 
 # ---------- 3. Python ----------
-# O pyodbc só tem pacote pronto (wheel) para versões do Python já estabelecidas. Numa versão nova
-# demais (ex.: 3.15) o pip tenta compilar e exige o Visual C++. Por isso o .venv usa uma destas:
-$VERSOES_OK = "3.14", "3.13", "3.12"
+$VERSAO_MINIMA = [version]"3.10"
 
 function Versao-Python($exe, $extra) {
-    try { & $exe @extra -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null } catch { $null }
+    try { [version](& $exe @extra -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null) } catch { $null }
 }
 
 function Achar-Python {
-    # 1º o lançador "py" (permite ter várias versões instaladas), depois os python.exe do PATH
-    if (Get-Command py -ErrorAction SilentlyContinue) {
-        foreach ($v in $VERSOES_OK) {
-            if ((Versao-Python "py" @("-$v")) -eq $v) { return @{ Exe = "py"; Extra = @("-$v") } }
-        }
+    # 1º o lançador "py" (usa a versão mais nova instalada), depois os python.exe do PATH
+    if ((Get-Command py -ErrorAction SilentlyContinue) -and (Versao-Python "py" @("-3")) -ge $VERSAO_MINIMA) {
+        return @{ Exe = "py"; Extra = @("-3") }
     }
     foreach ($c in Get-Command python -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*WindowsApps*" }) {
-        if ($VERSOES_OK -contains (Versao-Python $c.Source @())) { return @{ Exe = $c.Source; Extra = @() } }
+        if ((Versao-Python $c.Source @()) -ge $VERSAO_MINIMA) { return @{ Exe = $c.Source; Extra = @() } }
     }
 }
 
 Passo "Preparando o Python (.venv)"
-if (Test-Path $pythonVenv) {
-    $atual = Versao-Python $pythonVenv @()
-    if ($VERSOES_OK -notcontains $atual) {
-        Aviso "o .venv existente usa Python $atual, sem suporte ao pyodbc. Recriando."
-        Remove-Item -Recurse -Force $venv
-    }
+if ((Test-Path $pythonVenv) -and -not ((Versao-Python $pythonVenv @()) -ge $VERSAO_MINIMA)) {
+    Aviso "o .venv existente está quebrado ou é antigo demais. Recriando."
+    Remove-Item -Recurse -Force $venv
 }
 if (-not (Test-Path $pythonVenv)) {
     $py = Achar-Python
     if (-not $py) {
-        Falha ("nenhum Python compatível encontrado (precisa ser $($VERSOES_OK -join ', ')).`n" +
-               "Instale o Python 3.14 em python.org (Windows installer 64-bit, marque 'Add python.exe to PATH').`n" +
-               "Pode manter o outro Python instalado junto; o instalador escolhe a versão certa sozinho.")
+        Falha "Python $VERSAO_MINIMA ou mais novo não encontrado. Instale em python.org (Windows installer 64-bit, marque 'Add python.exe to PATH')."
     }
     & $py.Exe @($py.Extra) -m venv $venv
     if ($LASTEXITCODE -ne 0) { Falha "não consegui criar o .venv." }
 }
-# --only-binary: nunca tenta compilar o pyodbc (se faltar o pacote pronto, falha com mensagem clara)
-& $pythonVenv -m pip install --disable-pip-version-check -q --only-binary pyodbc -r (Join-Path $raiz "requirements.txt")
+# --only-binary: só instala pacotes prontos, nunca tenta compilar (o que exigiria o Visual C++)
+& $pythonVenv -m pip install --disable-pip-version-check -q --only-binary :all: -r (Join-Path $raiz "requirements.txt")
 if ($LASTEXITCODE -ne 0) { Falha "falha ao instalar as dependências (requirements.txt)." }
 Ok (& $pythonVenv --version)
 

@@ -24,7 +24,7 @@ Se o usuário não disser a loja, pergunte, ou use `todas` quando o pedido for c
 
 ## Como consultar
 
-Use sempre o script `scripts/consulta.py`, que roda Python + pyodbc com o ODBC Driver 17 para SQL Server:
+Use sempre o script `scripts/consulta.py`, que roda Python + `mssql-python` (driver oficial da Microsoft, conexão criptografada, sem precisar de ODBC Driver instalado):
 
 ```bash
 S=".claude/skills/banco-sismoura/scripts/consulta.py"

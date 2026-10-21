@@ -16,7 +16,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-import pyodbc
+import mssql_python  # driver oficial da Microsoft: não precisa de ODBC Driver instalado no Windows
 from dotenv import load_dotenv
 
 # Credenciais e servidores ficam no .env da raiz do projeto (fora do git). Modelo: .env.example
@@ -45,7 +45,6 @@ def carregar_config():
     cfg = {
         "usuario": os.getenv("SISMOURA_USUARIO", ""),
         "senha": os.getenv("SISMOURA_SENHA", ""),
-        "driver": os.getenv("SISMOURA_DRIVER", "ODBC Driver 17 for SQL Server"),
         "lojas": {},
     }
     for id_, nome in LOJAS.items():
@@ -62,8 +61,8 @@ def carregar_config():
     return cfg
 
 
-def _odbc(valor):
-    """Protege valores com ; ou } na string de conexão ODBC."""
+def _protegido(valor):
+    """Protege valores com ; ou } na string de conexão."""
     return "{" + str(valor).replace("}", "}}") + "}"
 
 
@@ -85,11 +84,11 @@ def validar_somente_leitura(sql):
 def conectar(cfg, loja, timeout):
     l = cfg["lojas"][loja]
     cs = (
-        f"DRIVER={{{cfg['driver']}}};SERVER={l['servidor']};DATABASE={l['banco']};"
-        f"UID={_odbc(l.get('usuario', cfg['usuario']))};PWD={_odbc(l.get('senha', cfg['senha']))};"
-        "TrustServerCertificate=yes;"
+        f"Server={l['servidor']};Database={l['banco']};"
+        f"UID={_protegido(l.get('usuario', cfg['usuario']))};PWD={_protegido(l.get('senha', cfg['senha']))};"
+        "Encrypt=yes;TrustServerCertificate=yes"  # conexão criptografada (servidores usam certificado próprio)
     )
-    conn = pyodbc.connect(cs, timeout=timeout, autocommit=False)
+    conn = mssql_python.connect(cs, timeout=timeout, autocommit=False)  # timeout de login (s)
     conn.timeout = 600  # timeout de execução da consulta (s)
     return conn
 
@@ -198,7 +197,7 @@ def main():
         nome = cfg["lojas"][loja]["nome"]
         try:
             colunas, linhas = executar(cfg, loja, sql, a.timeout)
-        except pyodbc.Error as e:
+        except mssql_python.Error as e:
             print(f"[{nome}] ERRO: {e}", file=sys.stderr)
             continue
         print(f"[{nome}] {len(linhas)} linha(s)", file=sys.stderr)
