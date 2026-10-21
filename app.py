@@ -9,6 +9,7 @@ import io
 import json
 import os
 import re
+import socket
 import sqlite3
 import sys
 import threading
@@ -655,8 +656,29 @@ def index():
     return send_from_directory(BASE / "web", "index.html")
 
 
+PORTA_OCUPADA = 3  # código de saída usado por servidor/iniciar.ps1 para não ficar tentando de novo
+
+
+def porta_em_uso(porta):
+    with socket.socket() as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", porta)) == 0
+
+
 if __name__ == "__main__":
-    if "--sem-navegador" not in sys.argv:
-        threading.Timer(1.2, lambda: webbrowser.open(f"http://localhost:{PORTA}")).start()
+    # Uso:  python app.py                 → modo local (servidor do Flask) e abre o navegador
+    #       python app.py --producao      → servidor Waitress, sem navegador (servidor da empresa)
+    producao = "--producao" in sys.argv
+    if porta_em_uso(PORTA):
+        print(f"ERRO: a porta {PORTA} já está em uso. Veja qual programa a ocupa antes de iniciar "
+              f"(não troque de porta sem atualizar orientacoes-projetos-ia.md).", file=sys.stderr)
+        sys.exit(PORTA_OCUPADA)
     print(f"Lojas liberadas neste servidor: {', '.join(LOJAS.values())}")
-    app.run(host=HOST, port=PORTA, debug=False)
+    print(f"Escutando em http://{HOST}:{PORTA} ({'produção' if producao else 'local'})", flush=True)
+    if producao:
+        from waitress import serve
+        serve(app, host=HOST, port=PORTA, threads=8)
+    else:
+        if "--sem-navegador" not in sys.argv:
+            threading.Timer(1.2, lambda: webbrowser.open(f"http://localhost:{PORTA}")).start()
+        app.run(host=HOST, port=PORTA, debug=False)

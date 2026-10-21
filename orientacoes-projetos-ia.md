@@ -77,9 +77,9 @@ Cada pasta contém:
 
 Complete estes pontos para que a IA não precise adivinhar:
 
-- Sistema operacional do servidor: _______
+- Sistema operacional do servidor: Windows (inicialização automática via Agendador de Tarefas, conta SYSTEM)
 - Endereço/nome do servidor: _______
-- Linguagem/framework dos sistemas: _______
-- Banco de dados utilizado: _______
+- Linguagem/framework dos sistemas: Python 3 + Flask, servido pelo Waitress em produção
+- Banco de dados utilizado: SQL Server (SISMOURA, somente leitura) + SQLite local por sistema
 - Quem acessa cada sistema: _______
 - Como é feito o backup: _______

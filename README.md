@@ -13,7 +13,33 @@ copy .env.example .env      # e preencha com as credenciais
 python app.py               # ou: Abrir relatório.bat
 ```
 
-Parâmetro `--sem-navegador` impede abrir o navegador ao iniciar (útil no servidor).
+Parâmetro `--sem-navegador` impede abrir o navegador ao iniciar. `--producao` usa o servidor Waitress (é o que o servidor da empresa usa). Se a porta já estiver em uso, o sistema não sobe e avisa.
+
+## Publicar no servidor (Windows)
+
+Sobe sozinho ao ligar o computador, sem precisar de login, na porta do `.env` (3003).
+
+1. Copie a pasta do projeto para o servidor (ex.: `C:\projetos\notas-fiscais-lancadas`).
+2. Instale o [Python 3](https://www.python.org/downloads/) (marque *Add python.exe to PATH*) e o *ODBC Driver 17 for SQL Server*.
+3. Crie o `.env` a partir do `.env.example`, com `HOST=0.0.0.0` e as `LOJAS_PERMITIDAS` desse servidor.
+4. Clique duas vezes em **`servidor\instalar.bat`** e confirme o pedido de administrador.
+
+O instalador:
+- confere o `.env`, o Python e o driver ODBC;
+- cria o `.venv` e instala as dependências;
+- confere se a porta está livre. Se outro programa a estiver usando, **para e avisa**, sem trocar de porta;
+- libera a porta no firewall só para a rede interna (perfis Domínio e Privado);
+- cria a tarefa agendada **"Relatorio de notas (3003)"**: roda como SYSTEM ao ligar o computador e reinicia sozinho se cair;
+- inicia o sistema, testa e mostra os endereços de acesso.
+
+Depois de atualizar o código, rode o `instalar.bat` de novo: ele para, atualiza as dependências e sobe outra vez, sem perder dados.
+
+| Ação | Como |
+| --- | --- |
+| Ver se está rodando | `Get-ScheduledTask "Relatorio de notas (3003)"` ou abra `http://localhost:3003` |
+| Parar / iniciar | `Stop-ScheduledTask` / `Start-ScheduledTask "Relatorio de notas (3003)"` (como administrador) |
+| Ver erros | `logs\servidor.log` |
+| Remover a inicialização automática | `servidor\desinstalar.bat` (não apaga dados, `.env` nem `.venv`) |
 
 ## Configuração (`.env`)
 
