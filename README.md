@@ -20,7 +20,7 @@ Parâmetro `--sem-navegador` impede abrir o navegador ao iniciar. `--producao` u
 Sobe sozinho ao ligar o computador, sem precisar de login, na porta do `.env` (3003).
 
 1. Copie a pasta do projeto para o servidor (ex.: `C:\projetos\notas-fiscais-lancadas`).
-2. Instale o [Python 3](https://www.python.org/downloads/) (marque *Add python.exe to PATH*) e o *ODBC Driver 17 for SQL Server*.
+2. Instale o [Python **3.14**](https://www.python.org/downloads/) (marque *Add python.exe to PATH*) e o *ODBC Driver 17 for SQL Server*. Versões 3.12 a 3.14 servem; a 3.15 ainda não tem o `pyodbc` pronto, e o instalador ignora essa versão se houver outra compatível.
 3. Crie o `.env` a partir do `.env.example`, com `HOST=0.0.0.0` e as `LOJAS_PERMITIDAS` desse servidor.
 4. Clique duas vezes em **`servidor\instalar.bat`** e confirme o pedido de administrador.
 

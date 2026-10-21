@@ -3,8 +3,8 @@
 #
 # O que faz:
 #   1. confere o .env, o Python e o driver ODBC
-#   2. cria o ambiente Python (.venv) e instala as dependências
-#   3. confere se a porta está livre (se estiver ocupada por outro programa, para e avisa)
+#   2. confere se a porta está livre (se estiver ocupada por outro programa, para e avisa)
+#   3. cria o ambiente Python (.venv) com uma versão compatível com o pyodbc e instala as dependências
 #   4. libera a porta no firewall só para a rede interna (perfis Domínio e Privado)
 #   5. cria a tarefa agendada "Relatorio de notas (<porta>)" que roda servidor\iniciar.ps1 ao ligar
 #   6. inicia o relatório e testa o acesso
@@ -70,19 +70,7 @@ Passo "Conferindo o driver ODBC"
 if (Get-OdbcDriver -Name $driver -Platform "64-bit" -ErrorAction SilentlyContinue) { Ok $driver }
 else { Aviso "'$driver' não encontrado. Instale-o, senão o relatório não conecta no SISMOURA." }
 
-# ---------- 2. Python ----------
-Passo "Preparando o Python (.venv)"
-if (-not (Test-Path $pythonVenv)) {
-    $py = Get-Command py, python -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*WindowsApps*" } | Select-Object -First 1
-    if (-not $py) { Falha "Python não encontrado. Instale o Python 3 (python.org) marcando 'Add python.exe to PATH'." }
-    & $py.Source -m venv $venv
-    if ($LASTEXITCODE -ne 0) { Falha "não consegui criar o .venv." }
-}
-& $pythonVenv -m pip install --disable-pip-version-check -q -r (Join-Path $raiz "requirements.txt")
-if ($LASTEXITCODE -ne 0) { Falha "falha ao instalar as dependências (requirements.txt)." }
-Ok (& $pythonVenv --version)
-
-# ---------- 3. porta ----------
+# ---------- 2. porta (antes do Python: numa reinstalação o .venv pode estar em uso) ----------
 Passo "Conferindo a porta $porta"
 if (Get-ScheduledTask -TaskName $nomeTarefa -ErrorAction SilentlyContinue) {
     Stop-ScheduledTask -TaskName $nomeTarefa   # reinstalação: para a versão em execução
@@ -93,6 +81,50 @@ if ($proc) {
     Falha "a porta $porta já está em uso por '$($proc.Name)' (PID $($proc.ProcessId)).`nNão troquei de porta: confira orientacoes-projetos-ia.md e libere a porta antes de instalar."
 }
 Ok "porta livre"
+
+# ---------- 3. Python ----------
+# O pyodbc só tem pacote pronto (wheel) para versões do Python já estabelecidas. Numa versão nova
+# demais (ex.: 3.15) o pip tenta compilar e exige o Visual C++. Por isso o .venv usa uma destas:
+$VERSOES_OK = "3.14", "3.13", "3.12"
+
+function Versao-Python($exe, $extra) {
+    try { & $exe @extra -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null } catch { $null }
+}
+
+function Achar-Python {
+    # 1º o lançador "py" (permite ter várias versões instaladas), depois os python.exe do PATH
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        foreach ($v in $VERSOES_OK) {
+            if ((Versao-Python "py" @("-$v")) -eq $v) { return @{ Exe = "py"; Extra = @("-$v") } }
+        }
+    }
+    foreach ($c in Get-Command python -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike "*WindowsApps*" }) {
+        if ($VERSOES_OK -contains (Versao-Python $c.Source @())) { return @{ Exe = $c.Source; Extra = @() } }
+    }
+}
+
+Passo "Preparando o Python (.venv)"
+if (Test-Path $pythonVenv) {
+    $atual = Versao-Python $pythonVenv @()
+    if ($VERSOES_OK -notcontains $atual) {
+        Aviso "o .venv existente usa Python $atual, sem suporte ao pyodbc. Recriando."
+        Remove-Item -Recurse -Force $venv
+    }
+}
+if (-not (Test-Path $pythonVenv)) {
+    $py = Achar-Python
+    if (-not $py) {
+        Falha ("nenhum Python compatível encontrado (precisa ser $($VERSOES_OK -join ', ')).`n" +
+               "Instale o Python 3.14 em python.org (Windows installer 64-bit, marque 'Add python.exe to PATH').`n" +
+               "Pode manter o outro Python instalado junto; o instalador escolhe a versão certa sozinho.")
+    }
+    & $py.Exe @($py.Extra) -m venv $venv
+    if ($LASTEXITCODE -ne 0) { Falha "não consegui criar o .venv." }
+}
+# --only-binary: nunca tenta compilar o pyodbc (se faltar o pacote pronto, falha com mensagem clara)
+& $pythonVenv -m pip install --disable-pip-version-check -q --only-binary pyodbc -r (Join-Path $raiz "requirements.txt")
+if ($LASTEXITCODE -ne 0) { Falha "falha ao instalar as dependências (requirements.txt)." }
+Ok (& $pythonVenv --version)
 
 # ---------- permissões ----------
 # A tarefa roda como SYSTEM: precisa ler o .env e gravar em dados\ e logs\
