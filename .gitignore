@@ -1,0 +1,32 @@
+# Credenciais e configuração local (modelo em .env.example)
+.env
+.env.*
+!.env.example
+config.json
+*.pem
+*.key
+
+# Dados reais (notas lançadas/pendentes) e exportações
+dados/
+*.db
+*.sqlite*
+*.xlsx
+*.csv
+*.xml
+*.zip
+saida/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Claude Code (configurações pessoais)
+.claude/settings.local.json
+
+# Sistema / editor
+.vscode/
+Thumbs.db
+desktop.ini
+*.log
